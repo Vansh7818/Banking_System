@@ -51,6 +51,9 @@ springdoc:
     path: /swagger-ui.html
     operationsSorter: method
 
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+
 logging:
   level:
     com.kyrodatatech.banking: DEBUG

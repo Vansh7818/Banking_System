@@ -84,6 +84,16 @@ $env:GOOGLE_CLIENT_SECRET = "your-client-secret"
 The frontend starts Google login at `http://localhost:8080/oauth2/authorization/google`.
 Google login cannot work while these variables are empty or contain placeholder values.
 
+After Google authentication, the backend redirects to the frontend OAuth callback
+and the frontend stores the returned session before opening the dashboard. For a
+shared or deployed frontend, set `FRONTEND_URL` to its public origin and register
+the matching backend callback URI in Google Cloud:
+
+```text
+FRONTEND_URL=https://your-frontend.example.com
+https://your-backend.example.com/login/oauth2/code/google
+```
+
 ## 🔒 Security & Workflow
 
 - **JWT Authentication**: Pass the `Authorization: Bearer <token>` header to access secured endpoints.

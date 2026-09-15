@@ -1,5 +1,6 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -9,11 +10,43 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
+const OAuthCallback = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const accessToken = params.get('accessToken');
+    const refreshToken = params.get('refreshToken');
+    const userId = params.get('userId');
+    const email = params.get('email');
+    const fullName = params.get('fullName');
+    const roles = params.get('roles');
+
+    if (!accessToken || !userId || !email || !fullName) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    localStorage.setItem('accessToken', accessToken);
+    if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+    localStorage.setItem('user', JSON.stringify({
+      id: userId,
+      email,
+      fullName,
+      roles: roles ? roles.split(',') : [],
+    }));
+    navigate('/', { replace: true });
+  }, [navigate]);
+
+  return <div className="min-h-screen flex items-center justify-center text-slate-500">Signing you in...</div>;
+};
+
 const AppRoutes = () => {
   const { isAuthenticated } = useAuth();
   return (
     <Routes>
       <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/oauth2/callback" element={<OAuthCallback />} />
       <Route path="/*" element={
         <ProtectedRoute>
           <Dashboard />

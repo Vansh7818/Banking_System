@@ -1,23 +1,21 @@
 package com.kyrodatatech.banking.domain.auth.oauth2;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.kyrodatatech.banking.domain.auth.JwtTokenProvider;
-import com.kyrodatatech.banking.domain.auth.dto.AuthResponse;
-import com.kyrodatatech.banking.domain.user.repository.UserRepository;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.MediaType;
+import java.io.IOException;
+import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.stream.Collectors;
+import com.kyrodatatech.banking.domain.auth.JwtTokenProvider;
+import com.kyrodatatech.banking.domain.user.repository.UserRepository;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * ================================================================
@@ -47,7 +45,9 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
     private final JwtTokenProvider jwtTokenProvider;
     private final UserRepository userRepository;
-    private final ObjectMapper objectMapper;
+
+        @Value("${app.frontend-url}")
+        private String frontendUrl;
 
     /**
      * Called by Spring Security when OAuth2 login succeeds.
@@ -76,25 +76,18 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String accessToken = jwtTokenProvider.generateAccessToken(user);
         String refreshToken = jwtTokenProvider.generateRefreshToken(user);
 
-        // Collect roles as strings
-        List<String> roles = user.getAuthorities()
-                .stream()
-                .map(GrantedAuthority::getAuthority)
-                .collect(Collectors.toList());
+        String callbackUrl = frontendUrl + "/oauth2/callback#accessToken="
+            + encode(accessToken) + "&refreshToken=" + encode(refreshToken)
+            + "&userId=" + encode(user.getId().toString())
+            + "&email=" + encode(user.getEmail())
+            + "&fullName=" + encode(user.getFullName())
+            + "&roles=" + encode(user.getAuthorities().stream()
+                .map(authority -> authority.getAuthority())
+                .collect(Collectors.joining(",")));
+        response.sendRedirect(callbackUrl);
+    }
 
-        // Build the response object
-        AuthResponse authResponse = AuthResponse.builder()
-                .userId(user.getId())
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .roles(roles)
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .build();
-
-        // Write the JSON response directly to HTTP response body
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setStatus(HttpServletResponse.SC_OK);
-        objectMapper.writeValue(response.getOutputStream(), authResponse);
+    private String encode(String value) {
+        return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
     }
 }
