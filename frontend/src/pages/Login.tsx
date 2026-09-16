@@ -165,7 +165,7 @@ const Login = () => {
               <div className="flex-1 border-t border-slate-200" />
             </div>
             <a
-              href="http://localhost:8080/oauth2/authorization/google"
+              href={`${window.location.protocol}//${window.location.hostname}:8080/oauth2/authorization/google`}
               className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-slate-200 rounded-xl hover:bg-slate-50 transition text-sm font-medium text-slate-700"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">

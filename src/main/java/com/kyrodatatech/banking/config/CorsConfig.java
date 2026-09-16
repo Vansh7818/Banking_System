@@ -56,6 +56,7 @@ public class CorsConfig {
         // In production, replace with your actual frontend domain(s)
         config.setAllowedOriginPatterns(Arrays.asList(
                 "http://localhost:3000",    // React development server
+                "http://127.0.0.1:3000",    // React development server via loopback IP
                 "http://localhost:4200",    // Angular development server
                 "http://localhost:8080",    // Same-origin (Swagger UI)
                 "https://app.kyrobank.com" // Production frontend
@@ -99,6 +100,7 @@ public class CorsConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOriginPatterns(Arrays.asList(
                 "http://localhost:3000",
+                "http://127.0.0.1:3000",
                 "http://localhost:4200",
                 "http://localhost:8080",
                 "https://app.kyrobank.com"

@@ -6,7 +6,7 @@ import {
   Menu, X, Bell
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { userApi, makerCheckerApi } from '../api';
+import { userApi, makerCheckerApi, paymentApi, transactionApi } from '../api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type Page = 'dashboard' | 'users' | 'transactions' | 'approvals' | 'payments' | 'collections' | 'liquidity' | 'llm';
@@ -296,9 +296,34 @@ const UsersPage = () => {
 // ─── Approvals Page ───────────────────────────────────────────────────────────
 const ApprovalsPage = () => {
   const [requests, setRequests] = useState<any[]>([]);
+  const [message, setMessage] = useState('');
+
+  const refresh = () => makerCheckerApi.getPending().then(r => setRequests(Array.isArray(r.data) ? r.data : [])).catch(() => setMessage('Unable to load approval requests.'));
+
+  const approve = async (id: string) => {
+    try {
+      await makerCheckerApi.approve(id);
+      setMessage('Request approved successfully.');
+      refresh();
+    } catch (error: any) {
+      setMessage(error.response?.data?.message ?? 'Approval failed.');
+    }
+  };
+
+  const reject = async (id: string) => {
+    const reason = window.prompt('Enter a rejection reason:');
+    if (!reason?.trim()) return;
+    try {
+      await makerCheckerApi.reject(id, reason.trim());
+      setMessage('Request rejected successfully.');
+      refresh();
+    } catch (error: any) {
+      setMessage(error.response?.data?.message ?? 'Rejection failed.');
+    }
+  };
 
   useEffect(() => {
-    makerCheckerApi.getPending().then(r => setRequests(r.data)).catch(() => {});
+    refresh();
   }, []);
 
   return (
@@ -306,6 +331,7 @@ const ApprovalsPage = () => {
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
         <strong>⚖️ Maker-Checker Enforcement:</strong> You can only approve requests you did NOT create. Self-approval is strictly blocked by the backend.
       </div>
+      {message && <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">{message}</div>}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-200">
           <h3 className="font-bold text-slate-900">Pending Approval Requests</h3>
@@ -333,10 +359,10 @@ const ApprovalsPage = () => {
                   <td className="px-6 py-4">{r.requestType}</td>
                   <td className="px-6 py-4 text-slate-500">{r.createdBy}</td>
                   <td className="px-6 py-4 flex gap-2">
-                    <button className="flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg hover:bg-emerald-200">
+                      <button onClick={() => approve(r.id)} className="flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg hover:bg-emerald-200">
                       <CheckCircle2 size={13} /> Approve
                     </button>
-                    <button className="flex items-center gap-1 text-xs bg-red-100 text-red-700 px-3 py-1 rounded-lg hover:bg-red-200">
+                    <button onClick={() => reject(r.id)} className="flex items-center gap-1 text-xs bg-red-100 text-red-700 px-3 py-1 rounded-lg hover:bg-red-200">
                       <XCircle size={13} /> Reject
                     </button>
                   </td>
@@ -355,14 +381,30 @@ const PaymentsPage = () => {
   const [type, setType] = useState('NEFT');
   const [amount, setAmount] = useState('');
   const [beneficiary, setBeneficiary] = useState('');
+  const [ifsc, setIfsc] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
 
   const paymentTypes = ['NEFT', 'RTGS', 'IMPS', 'UPI', 'SWIFT', 'ACH', 'BULK'];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 3000);
+    setError('');
+    try {
+      await paymentApi.initiate(type, {
+        amount: Number(amount),
+        currency: type === 'SWIFT' ? 'USD' : 'INR',
+        debitAccountNo: 'DEMO-MAKER-ACCOUNT',
+        creditAccountNo: type === 'UPI' ? 'UPI-BENEFICIARY' : beneficiary,
+        creditAccountName: beneficiary,
+        creditIfscCode: ifsc || undefined,
+        upiVpa: type === 'UPI' ? beneficiary : undefined,
+        swiftBic: type === 'SWIFT' ? beneficiary : undefined,
+      });
+      setSubmitted(true);
+    } catch (requestError: any) {
+      setError(requestError.response?.data?.message ?? 'Payment could not be submitted.');
+    }
   };
 
   return (
@@ -388,12 +430,18 @@ const PaymentsPage = () => {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹)</label>
                 <input type="number" required value={amount} onChange={e => setAmount(e.target.value)} placeholder="e.g. 250000"
                   className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 {type === 'RTGS' && <p className="text-xs text-amber-600 mt-1">⚠️ RTGS requires minimum ₹2,00,000</p>}
               </div>
+              {!['UPI', 'SWIFT'].includes(type) && <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Beneficiary IFSC</label>
+                <input required value={ifsc} onChange={e => setIfsc(e.target.value.toUpperCase())} placeholder="HDFC0001234"
+                  className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   {type === 'UPI' ? 'VPA (e.g. user@bank)' : type === 'SWIFT' ? 'BIC Code' : 'Beneficiary Account'}
@@ -474,13 +522,15 @@ const LiquidityPage = () => (
 
 // ─── Transactions Page ────────────────────────────────────────────────────────
 const TransactionsPage = () => {
-  const mockTxns = [
-    { ref: 'TXN-2024-A1B2', type: 'RTGS', amount: '₹2,50,000', status: 'COMPLETED', date: '2026-09-15' },
-    { ref: 'TXN-2024-C3D4', type: 'SWIFT', amount: '$12,400', status: 'AML_FLAGGED', date: '2026-09-15' },
-    { ref: 'TXN-2024-E5F6', type: 'IMPS', amount: '₹45,000', status: 'PENDING', date: '2026-09-14' },
-    { ref: 'TXN-2024-G7H8', type: 'NEFT', amount: '₹1,20,000', status: 'COMPLETED', date: '2026-09-14' },
-    { ref: 'TXN-2024-I9J0', type: 'UPI', amount: '₹5,000', status: 'PROCESSING', date: '2026-09-13' },
-  ];
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    transactionApi.getAll()
+      .then(response => setTransactions(Array.isArray(response.data) ? response.data : []))
+      .catch(() => setTransactions([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="p-6">
@@ -509,19 +559,21 @@ const TransactionsPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {mockTxns.map(t => (
-                <tr key={t.ref} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 font-mono text-xs text-slate-700">{t.ref}</td>
-                  <td className="px-6 py-4 font-medium">{t.type}</td>
-                  <td className="px-6 py-4 font-bold text-slate-900">{t.amount}</td>
+              {transactions.map(t => (
+                <tr key={t.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4 font-mono text-xs text-slate-700">{t.transactionRefNo}</td>
+                  <td className="px-6 py-4 font-medium">{t.transactionType}</td>
+                  <td className="px-6 py-4 font-bold text-slate-900">{t.currency} {Number(t.amount).toLocaleString('en-IN')}</td>
                   <td className="px-6 py-4">
                     <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statusBadge[t.status] ?? 'bg-slate-100'}`}>
                       {t.status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-slate-500">{t.date}</td>
+                  <td className="px-6 py-4 text-slate-500">{t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '-'}</td>
                 </tr>
               ))}
+              {!loading && transactions.length === 0 && <tr><td colSpan={5} className="px-6 py-10 text-center text-slate-400">No transactions have been submitted.</td></tr>}
+              {loading && <tr><td colSpan={5} className="px-6 py-10 text-center text-slate-400">Loading transactions from backend...</td></tr>}
             </tbody>
           </table>
         </div>

@@ -1,6 +1,7 @@
 package com.kyrodatatech.banking.domain.transaction.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
 import com.kyrodatatech.banking.domain.transaction.enums.TransactionStatus;
 import com.kyrodatatech.banking.domain.transaction.enums.TransactionType;
@@ -191,11 +192,13 @@ public class Transaction {
     /** The user who created (initiated) this transaction */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_id")
+    @JsonIgnore
     private User createdBy;
 
     /** The user who approved or rejected this transaction */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "approved_by_id")
+    @JsonIgnore
     private User approvedBy;
 
     /** The Maker-Checker approval request linked to this transaction */

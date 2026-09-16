@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:8080/api',
+  baseURL: `${window.location.protocol}//${window.location.hostname}:8080/api`,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -40,13 +40,17 @@ export const userApi = {
 export const makerCheckerApi = {
   getPending: () => api.get('/maker-checker/pending'),
   approve: (id: string) => api.post(`/maker-checker/${id}/approve`),
-  reject: (id: string, reason: string) =>
-    api.post(`/maker-checker/${id}/reject`, { reason }),
+  reject: (id: string, rejectionReason: string) =>
+    api.post(`/maker-checker/${id}/reject`, { rejectionReason }),
 };
 
 export const transactionApi = {
   getAll: () => api.get('/transactions'),
-  initiate: (payload: any) => api.post('/transactions/initiate', payload),
+};
+
+export const paymentApi = {
+  initiate: (type: string, payload: Record<string, unknown>) =>
+    api.post(`/payments/${type.toLowerCase()}`, payload),
 };
 
 export const llmApi = {
