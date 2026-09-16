@@ -168,7 +168,7 @@ public class AuthService {
     @Transactional
     public AuthResponse refreshToken(String refreshToken) {
         // Validate the refresh token
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
+        if (!jwtTokenProvider.validateRefreshToken(refreshToken)) {
             throw new AppException("Invalid or expired refresh token. Please log in again.",
                     HttpStatus.UNAUTHORIZED);
         }

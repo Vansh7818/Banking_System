@@ -30,6 +30,7 @@ export const authApi = {
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }),
   ping: () => api.get('/auth/ping'),
+  register: (data: any) => api.post('/auth/register', data),
 };
 
 export const userApi = {
@@ -54,5 +55,5 @@ export const paymentApi = {
 };
 
 export const llmApi = {
-  analyze: (text: string) => api.post('/llm/analyze', { prompt: text }),
+  analyze: (text: string) => api.post('/llm/analyze', { transactionDetails: text }),
 };

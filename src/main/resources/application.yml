@@ -40,9 +40,9 @@ jwt:
   refresh-token-expiration: 604800000 # 7 days
   issuer: kyrobank
 
-llm:
-  base-url: http://localhost:11434
-  model: llama3
+gemini:
+  api:
+    key: ${GEMINI_API_KEY:YOUR_GEMINI_API_KEY_HERE}
 
 springdoc:
   api-docs:
