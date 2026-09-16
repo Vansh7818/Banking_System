@@ -7,6 +7,10 @@ import com.kyrodatatech.banking.domain.user.enums.ApprovalStatus;
 import com.kyrodatatech.banking.domain.user.enums.UserStatus;
 import com.kyrodatatech.banking.domain.user.repository.MakerCheckerRepository;
 import com.kyrodatatech.banking.domain.user.repository.UserRepository;
+import com.kyrodatatech.banking.domain.transaction.entity.Transaction;
+import com.kyrodatatech.banking.domain.transaction.enums.TransactionStatus;
+import com.kyrodatatech.banking.domain.transaction.repository.TransactionRepository;
+import com.kyrodatatech.banking.domain.transaction.service.TransactionService;
 import com.kyrodatatech.banking.exception.AppException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,6 +65,8 @@ public class MakerCheckerService {
 
     private final MakerCheckerRepository makerCheckerRepository;
     private final UserRepository userRepository;
+    private final TransactionRepository transactionRepository;
+    private final TransactionService transactionService;
     private final ObjectMapper objectMapper; // For parsing JSON payloads
 
     // ─────────────────────────────────────────────────────────────
@@ -228,6 +234,13 @@ public class MakerCheckerService {
         request.setRejectionReason(rejectionReason);
         request.setActionedAt(LocalDateTime.now());
 
+        if ("INITIATE_PAYMENT".equals(request.getActionType())) {
+            transactionRepository.findById(request.getEntityId()).ifPresent(transaction -> {
+                transaction.setStatus(TransactionStatus.REJECTED);
+                transactionRepository.save(transaction);
+            });
+        }
+
         MakerCheckerRequest savedRequest = makerCheckerRepository.save(request);
         log.info("Request {} REJECTED by checker: {} | Reason: {}",
                 requestId, checkerName, rejectionReason);
@@ -329,9 +342,17 @@ public class MakerCheckerService {
             }
 
             case "INITIATE_PAYMENT" -> {
-                // Submit payment to the banking network
-                // TODO: Delegate to PaymentService.processApprovedPayment(entityId)
-                log.info("Payment {} approved — sending to bank network", request.getEntityId());
+                Transaction transaction = transactionRepository.findById(request.getEntityId())
+                    .orElseThrow(() -> new AppException(
+                        "Payment not found for approval: " + request.getEntityId(),
+                        HttpStatus.NOT_FOUND
+                    ));
+                transaction.setStatus(TransactionStatus.APPROVED);
+                transaction.setApprovedBy(userRepository.findById(request.getCheckerId()).orElse(null));
+                transaction.setApprovedAt(LocalDateTime.now());
+                transactionRepository.save(transaction);
+                transactionService.processApprovedTransaction(transaction.getId());
+                log.info("Payment {} approved and sent for bank processing", request.getEntityId());
             }
 
             default -> log.warn("Unknown action type in approved request: {}", request.getActionType());

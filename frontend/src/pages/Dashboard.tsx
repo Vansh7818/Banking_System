@@ -6,7 +6,7 @@ import {
   Menu, X, Bell, Plus, Download, QrCode
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { userApi, transactionApi, makerCheckerApi, llmApi, authApi } from '../api';
+import { userApi, transactionApi, makerCheckerApi, paymentApi, llmApi, authApi } from '../api';
 import { QRCodeSVG } from 'qrcode.react';
 
 // ─── Types & Global UI State ──────────────────────────────────────────────────
@@ -467,6 +467,111 @@ const TransactionsPage = () => (
     </div>
   </div>
 );
+
+const PaymentsPage = ({ showToast }: any) => {
+  const [type, setType] = useState('NEFT');
+  const [amount, setAmount] = useState('');
+  const [debitAccountNo, setDebitAccountNo] = useState('');
+  const [creditAccountNo, setCreditAccountNo] = useState('');
+  const [creditAccountName, setCreditAccountName] = useState('');
+  const [creditIfscCode, setCreditIfscCode] = useState('');
+  const [upiVpa, setUpiVpa] = useState('');
+  const [swiftBic, setSwiftBic] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const submitPayment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSubmitting(true);
+    try {
+      const payload: Record<string, unknown> = {
+        amount: Number(amount),
+        currency: type === 'SWIFT' ? 'USD' : 'INR',
+        debitAccountNo,
+        creditAccountNo: type === 'UPI' ? `UPI-${upiVpa}` : creditAccountNo,
+        creditAccountName,
+        creditIfscCode: creditIfscCode || undefined,
+        upiVpa: type === 'UPI' ? upiVpa : undefined,
+        swiftBic: type === 'SWIFT' ? swiftBic : undefined,
+      };
+      const response = await paymentApi.initiate(type, payload);
+      showToast(`Payment ${response.data.transactionRefNo} submitted for approval.`, 'success');
+      setAmount('');
+      setCreditAccountNo('');
+      setCreditAccountName('');
+    } catch (error: any) {
+      showToast(error.response?.data?.message ?? 'Payment submission failed.', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const requiresIfsc = ['NEFT', 'RTGS', 'IMPS', 'ACH'].includes(type);
+  const requiresBeneficiaryAccount = !['UPI'].includes(type);
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex flex-wrap gap-2">
+        {['INTERNAL', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'SWIFT', 'ACH', 'BULK'].map(rail => (
+          <button key={rail} type="button" onClick={() => setType(rail)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${type === rail ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-400'}`}>
+            {rail}
+          </button>
+        ))}
+      </div>
+      <form onSubmit={submitPayment} className="bg-white rounded-2xl border border-slate-200 p-6 max-w-2xl space-y-4 shadow-sm">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">Initiate {type} payment</h2>
+          <p className="text-sm text-slate-500 mt-1">The payment will be validated and routed to maker-checker approval.</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <input required value={debitAccountNo} onChange={event => setDebitAccountNo(event.target.value)} placeholder="Source account number" className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm" />
+          <input required type="number" min="0.01" step="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder={type === 'RTGS' ? 'Amount (minimum ₹2,00,000)' : 'Amount'} className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm" />
+          {requiresBeneficiaryAccount && <input required value={creditAccountNo} onChange={event => setCreditAccountNo(event.target.value)} placeholder="Beneficiary account number" className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm" />}
+          <input required value={creditAccountName} onChange={event => setCreditAccountName(event.target.value)} placeholder="Beneficiary name" className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm" />
+          {requiresIfsc && <input required value={creditIfscCode} onChange={event => setCreditIfscCode(event.target.value.toUpperCase())} placeholder="Beneficiary IFSC" className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm" />}
+          {type === 'UPI' && <input required value={upiVpa} onChange={event => setUpiVpa(event.target.value)} placeholder="UPI VPA, e.g. user@bank" className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm" />}
+          {type === 'SWIFT' && <input required value={swiftBic} onChange={event => setSwiftBic(event.target.value.toUpperCase())} placeholder="SWIFT BIC" className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm" />}
+        </div>
+        <button disabled={submitting} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition">
+          {submitting ? 'Submitting...' : 'Submit payment for approval'}
+        </button>
+      </form>
+    </div>
+  );
+};
+
+const LlmPage = ({ showToast }: any) => {
+  const [details, setDetails] = useState('');
+  const [analysis, setAnalysis] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const analyze = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!details.trim()) return;
+    setLoading(true);
+    try {
+      const response = await llmApi.analyze(details.trim());
+      setAnalysis(response.data.analysis ?? 'No analysis returned.');
+    } catch (error: any) {
+      const message = error.response?.data?.message ?? 'AI analysis is unavailable.';
+      setAnalysis(message);
+      showToast(message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-6 max-w-3xl space-y-6">
+      <form onSubmit={analyze} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+        <div className="flex items-center gap-3 mb-4"><Bot size={24} className="text-blue-600" /><div><h2 className="text-xl font-bold text-slate-900">AI transaction analysis</h2><p className="text-sm text-slate-500">Analyze a transaction for AML and fraud risk indicators.</p></div></div>
+        <textarea required rows={5} value={details} onChange={event => setDetails(event.target.value)} placeholder="Describe the transaction, beneficiary, amount, country, and history..." className="w-full border border-slate-200 rounded-lg p-3 text-sm resize-none focus:ring-2 focus:ring-blue-500 outline-none" />
+        <button disabled={loading || !details.trim()} className="mt-4 w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-semibold py-2.5 rounded-lg transition">{loading ? 'Analyzing...' : 'Analyze transaction'}</button>
+      </form>
+      {analysis && <div className="bg-slate-900 text-emerald-300 rounded-2xl p-6 whitespace-pre-wrap text-sm shadow-sm">{analysis}</div>}
+    </div>
+  );
+};
 
 // ─── Main App Layout ──────────────────────────────────────────────────────────
 const Dashboard = () => {

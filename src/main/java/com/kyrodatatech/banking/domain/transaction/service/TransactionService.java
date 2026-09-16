@@ -1,8 +1,13 @@
 package com.kyrodatatech.banking.domain.transaction.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kyrodatatech.banking.domain.transaction.entity.Transaction;
 import com.kyrodatatech.banking.domain.transaction.enums.TransactionStatus;
 import com.kyrodatatech.banking.domain.transaction.repository.TransactionRepository;
+import com.kyrodatatech.banking.domain.user.entity.MakerCheckerRequest;
+import com.kyrodatatech.banking.domain.user.enums.ApprovalStatus;
+import com.kyrodatatech.banking.domain.user.repository.MakerCheckerRepository;
 import com.kyrodatatech.banking.exception.AppException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -69,6 +73,8 @@ import java.util.UUID;
 public class TransactionService {
 
     private final TransactionRepository transactionRepository;
+    private final MakerCheckerRepository makerCheckerRepository;
+    private final ObjectMapper objectMapper;
 
     // Transaction limits (in INR) — In production, load from database config
     private static final BigDecimal IMPS_LIMIT = new BigDecimal("500000");    // ₹5 Lakh
@@ -119,7 +125,36 @@ public class TransactionService {
             log.info("Transaction {} moved to PENDING_APPROVAL queue", transaction.getTransactionRefNo());
         }
 
-        return transactionRepository.save(transaction);
+        transaction = transactionRepository.save(transaction);
+        if (transaction.getStatus() == TransactionStatus.PENDING_APPROVAL) {
+            createPaymentApprovalRequest(transaction);
+        }
+        return transaction;
+    }
+
+    private void createPaymentApprovalRequest(Transaction transaction) {
+        if (transaction.getCreatedBy() == null) {
+            throw new AppException("A payment maker is required for approval.", HttpStatus.BAD_REQUEST);
+        }
+
+        try {
+            MakerCheckerRequest request = MakerCheckerRequest.builder()
+                    .actionType("INITIATE_PAYMENT")
+                    .requestPayload(objectMapper.writeValueAsString(transaction))
+                    .makerId(transaction.getCreatedBy().getId())
+                    .makerName(transaction.getCreatedBy().getFullName())
+                    .entityId(transaction.getId())
+                    .entityType("TRANSACTION")
+                    .status(ApprovalStatus.PENDING)
+                    .priority(transaction.getAmount().compareTo(new BigDecimal("5000000")) >= 0 ? "HIGH" : "MEDIUM")
+                    .build();
+
+            request = makerCheckerRepository.save(request);
+            transaction.setMakerCheckerRequestId(request.getId());
+            transactionRepository.save(transaction);
+        } catch (JsonProcessingException exception) {
+            throw new AppException("Unable to create payment approval request.", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────

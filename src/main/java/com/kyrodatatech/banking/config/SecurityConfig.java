@@ -135,7 +135,7 @@ public class SecurityConfig {
 
                 // LLM endpoints — Internal use only
                 .requestMatchers("/api/llm/**")
-                    .hasAnyRole("BANK_SUPER_ADMIN", "RISK_OFFICER", "COMPLIANCE_OFFICER")
+                    .hasAnyRole("BANK_SUPER_ADMIN", "RISK_OFFICER", "COMPLIANCE_OFFICER", "AML_SANCTIONS_REVIEWER")
 
                 // ALL OTHER ENDPOINTS — Must be authenticated (any valid JWT)
                 .anyRequest().authenticated()
