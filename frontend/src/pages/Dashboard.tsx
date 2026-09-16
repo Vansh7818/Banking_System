@@ -76,9 +76,23 @@ const navItems = [
   { id: 'llm',          label: 'AI Analysis',     icon: Bot },
 ];
 
+const canManageUsers = (roles: string[]) =>
+  roles.includes('ROLE_BANK_SUPER_ADMIN') || roles.includes('ROLE_BANK_USER_ADMIN');
+
+const canReviewApprovals = (roles: string[]) =>
+  roles.some(role => [
+    'ROLE_BANK_SUPER_ADMIN',
+    'ROLE_BANK_USER_ADMIN',
+    'ROLE_CORP_ADMIN',
+    'ROLE_CORP_CHECKER',
+    'ROLE_CORP_APPROVER_L1',
+    'ROLE_CORP_APPROVER_L2',
+    'ROLE_CORP_FINAL_AUTHORIZER',
+  ].includes(role));
+
 const Sidebar = ({ page, setPage, open, setOpen }: any) => {
-  const { user, logout, isSuperAdmin, isBankStaff } = useAuth();
-  const showAdmin = isSuperAdmin() || isBankStaff();
+  const { user, logout } = useAuth();
+  const roles = user?.roles ?? [];
 
   return (
     <>
@@ -100,7 +114,8 @@ const Sidebar = ({ page, setPage, open, setOpen }: any) => {
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {navItems.filter(item => {
-            if (['users', 'approvals'].includes(item.id) && !showAdmin) return false;
+            if (item.id === 'users') return canManageUsers(roles);
+            if (item.id === 'approvals') return canReviewApprovals(roles);
             return true;
           }).map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => { setPage(id as Page); setOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${page === id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>
